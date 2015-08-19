@@ -2,7 +2,8 @@
   (require
     [clojure.clr.io :as io]
     [clojure.string :as string]
-    [gamma.api :as g])
+    [gamma.api :as g]
+    [gamma.program :as p])
   (:import [System.IO
             Path File Directory FileInfo DirectoryInfo]))
 
@@ -48,6 +49,14 @@
         lines))))
 
 ;; ============================================================
+;; what are things
+;; ============================================================
+;; no validation here
+
+(defn gamma-program? [x]
+  (and (map? x) (= (:tag x) :program)))
+
+;; ============================================================
 ;; conversion to unity shaders
 ;; ============================================================
 
@@ -60,41 +69,45 @@
       :vec3 (throw
               (Exception.
                 (str "can't have vec3 input! name: " name)))
-      :vec4 (str "\"" name "\" (\"" name "\", Vector) = (0, 0, 0, 0)")
-      :float (str "\"" name "\" (\"" name "\", Float) = 0.0")
+      :vec4 (str name " (\"" name "\", Vector) = (0, 0, 0, 0)")
+      :float (str name " (\"" name "\", Float) = 0.0")
       :else (throw
               (Exception.
                 (str
-                  "Currently incapable of dealing with inputs of type " type "; name: " name))))))
+                  "Currently incapable of dealing with inputs of type "
+                  type "; name: " name))))))
 
-(defn unity-shader [name,
-                    {:keys [vertex-shader
-                            fragment-shader]
-                     :as program}]
-  (let [vertex-progo (if-let [vs (:glsl vertex-shader)]
-                       (line-join
-                         [""
-                          "#ifdef VERTEX"
-                          ""
-                          vs
-                          "#endif"
-                          ""])
-                       (throw (Exception. "Vertex shader not found")))
-        fragment-progo (if-let [fs (:glsl fragment-shader)]
-                         (line-join
-                           [""
-                            "#ifdef FRAGMENT"
-                            ""
-                            fs
-                            "#endif"
-                            ""])
-                         (throw (Exception. "Fragment shader not found")))
-        progo (line-join
-                [vertex-progo
-                 fragment-progo])]
+(defn unity-shader [name, program]
+  (let [{:keys [vertex-shader
+                fragment-shader]
+         :as program}            (if (gamma-program? program)
+                                   program
+                                   (p/program program))
+         vertex-progo (if-let [vs (:glsl vertex-shader)]
+                        (line-join
+                          [""
+                           "#ifdef VERTEX"
+                           ""
+                           vs
+                           "#endif"
+                           ""])
+                        (throw (Exception. "Vertex shader not found")))
+         fragment-progo (if-let [fs (:glsl fragment-shader)]
+                          (line-join
+                            [""
+                             "#ifdef FRAGMENT"
+                             ""
+                             fs
+                             "#endif"
+                             ""])
+                          (throw (Exception. "Fragment shader not found")))
+         progo (line-join
+                 [vertex-progo
+                  fragment-progo])]
     (format-program
-      (block (line-join (input-decl program)))
       (block (str "Shader \"" name "\"")
+        (block "Properties"
+          (line-join (input-decl program)))
         (block "SubShader"
           (block "Pass"
             (line-join
@@ -106,17 +119,35 @@
 ;; writing
 ;; ============================================================
 
-(defn write-shader [name dir program]
-  (File/WriteAllText
-    (Path/Combine
-      (.FullName (io/as-file dir))
-      (str name ".shader"))
-    (unity-shader name program)))
+(defn write-shader [name dir prog]
+  (let [p (cond
+            (string? prog) prog
+            (map? prog) (unity-shader name prog)
+            :else (throw
+                    (Exception.
+                      (str "prog must be either string,"
+                        " gamma program map (eg, (= true (gamma-program? prog)))),"
+                        " or map."))))
+        path (Path/Combine
+               (.FullName (io/as-file dir))
+               (str name ".shader"))]
+    (File/WriteAllText path p)
+    (println p)
+    (println path)))
 
 ;; ============================================================
 ;; gamma help
 ;; ============================================================
 ;; maybe this should be in a different namespace. who can know.
+
+(defn g<
+  ([_] true)
+  ([a b] (g/< a b))
+  ([a b & args]
+   (->> (list* a b args)
+     (partition 2 1)
+     (map #(apply g/< %))
+     (reduce g/and))))
 
 (defn g+
   ([] 0)
