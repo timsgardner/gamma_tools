@@ -1,3 +1,3 @@
-# Introduction to gamma_tools
+# Introduction to gamma-tools
 
-TODO: write [great documentation](http://jacobian.org/writing/great-documentation/what-to-write/)
+TODO: write [great documentation](http://jacobian.org/writing/what-to-write/)

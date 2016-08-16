@@ -1,4 +1,4 @@
-(ns gamma-tools.core
+(ns net.timsg.gamma-tools.core
   (:refer-clojure :exclude [aget])
   (:require
    [clojure.clr.io :as io]
